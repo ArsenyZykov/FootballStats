@@ -5,6 +5,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -19,20 +20,32 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.footballstats.ui.competitions.CompetitionsScreen
 import com.example.footballstats.ui.favorites.FavoritesScreen
+import com.example.footballstats.ui.favorites.FavoritesViewModel
+import com.example.footballstats.ui.filters.TeamFiltersScreen
 import com.example.footballstats.ui.matches.MatchesScreen
 import com.example.footballstats.ui.teams.TeamDetailsScreen
 import com.example.footballstats.ui.teams.TeamsScreen
 import com.example.footballstats.ui.teams.TeamsViewModel
 
+private const val TEAM_FILTERS_ROUTE = "team_filters"
+
 @Composable
 fun FootballNavigation() {
     val navController = rememberNavController()
+
     val teamsViewModel: TeamsViewModel = viewModel()
+    val favoritesViewModel: FavoritesViewModel = viewModel()
+
     val uiState by teamsViewModel.uiState.collectAsState()
+    val favoritesState by favoritesViewModel.uiState.collectAsState()
+    val showFilterBadge by teamsViewModel.showFilterBadge.collectAsState()
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
-    val showBottomBar = currentRoute != AppDestination.TeamDetails.route
+
+    val showBottomBar =
+        currentRoute != AppDestination.TeamDetails.route &&
+                currentRoute != TEAM_FILTERS_ROUTE
 
     Scaffold(
         bottomBar = {
@@ -49,14 +62,28 @@ fun FootballNavigation() {
             composable(AppDestination.Teams.route) {
                 TeamsScreen(
                     uiState = uiState,
-                    onQueryChange = teamsViewModel::onSearchQueryChange,
-                    onSearch = teamsViewModel::searchTeams,
-                    onClearSearch = teamsViewModel::clearSearch,
+                    showFilterBadge = showFilterBadge,
+                    onOpenFilters = {
+                        navController.navigate(TEAM_FILTERS_ROUTE) {
+                            launchSingleTop = true
+                        }
+                    },
                     onRetry = teamsViewModel::retry,
                     onTeamClick = { teamId ->
                         navController.navigate(
                             AppDestination.TeamDetails.createRoute(teamId)
                         )
+                    }
+                )
+            }
+
+            composable(TEAM_FILTERS_ROUTE) {
+                TeamFiltersScreen(
+                    onBackClick = {
+                        navController.popBackStack()
+                    },
+                    onFiltersSaved = {
+                        navController.popBackStack()
                     }
                 )
             }
@@ -70,7 +97,21 @@ fun FootballNavigation() {
             }
 
             composable(AppDestination.Favorites.route) {
-                FavoritesScreen()
+                FavoritesScreen(
+                    uiState = favoritesState,
+                    onRetry = favoritesViewModel::retry,
+                    onRemoveFavorite = { team ->
+                        favoritesViewModel.setFavorite(
+                            team = team,
+                            isFavorite = false
+                        )
+                    },
+                    onTeamClick = { teamId ->
+                        navController.navigate(
+                            AppDestination.TeamDetails.createRoute(teamId)
+                        )
+                    }
+                )
             }
 
             composable(
@@ -82,19 +123,53 @@ fun FootballNavigation() {
                 )
             ) { backStackEntry ->
                 val teamId = backStackEntry.arguments?.getInt("teamId")
-                val team = uiState.teams.find { it.id == teamId }
+
+                val availableTeam =
+                    uiState.teams.find { it.id == teamId }
+                        ?: favoritesState.teams.find { it.id == teamId }
+
+                // Сохраняем открытую карточку в памяти, чтобы удаление
+                // из избранного не закрыло её во время просмотра.
+                val retainedTeam = remember(backStackEntry) {
+                    androidx.compose.runtime.mutableStateOf<
+                            com.example.footballstats.domain.model.Team?
+                            >(null)
+                }
+
+                androidx.compose.runtime.LaunchedEffect(availableTeam) {
+                    if (availableTeam != null) {
+                        retainedTeam.value = availableTeam
+                    }
+                }
+
+                val team = availableTeam ?: retainedTeam.value
 
                 when {
                     team != null -> {
+                        val isFavorite = favoritesState.teams.any {
+                            it.id == team.id
+                        }
+
                         TeamDetailsScreen(
                             team = team,
+                            isFavorite = isFavorite,
+                            canChangeFavorite =
+                                favoritesState.hasLoaded &&
+                                        team.id !in favoritesState.pendingTeamIds,
+                            favoriteError = favoritesState.errorMessage,
+                            onToggleFavorite = {
+                                favoritesViewModel.setFavorite(
+                                    team = team,
+                                    isFavorite = !isFavorite
+                                )
+                            },
                             onBackClick = {
                                 navController.popBackStack()
                             }
                         )
                     }
 
-                    uiState.isLoading -> {
+                    uiState.isLoading || favoritesState.isLoading -> {
                         Box(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
@@ -112,8 +187,8 @@ fun FootballNavigation() {
                             verticalArrangement = Arrangement.Center
                         ) {
                             Text(
-                                text = uiState.errorMessage
-                                    ?: "Команда недоступна. Вернитесь к списку."
+                                text = "Команда недоступна. " +
+                                        "Вернитесь к списку."
                             )
 
                             Spacer(Modifier.height(16.dp))
@@ -151,6 +226,7 @@ private fun FootballBottomBar(
                         ) {
                             saveState = true
                         }
+
                         launchSingleTop = true
                         restoreState = true
                     }

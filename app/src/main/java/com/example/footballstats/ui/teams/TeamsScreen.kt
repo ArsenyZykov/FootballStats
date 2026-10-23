@@ -6,9 +6,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -17,7 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.footballstats.R
 import com.example.footballstats.domain.model.Team
@@ -27,9 +26,8 @@ import java.util.Locale
 @Composable
 fun TeamsScreen(
     uiState: TeamsUiState,
-    onQueryChange: (String) -> Unit,
-    onSearch: () -> Unit,
-    onClearSearch: () -> Unit,
+    showFilterBadge: Boolean,
+    onOpenFilters: () -> Unit,
     onRetry: () -> Unit,
     onTeamClick: (Int) -> Unit
 ) {
@@ -41,6 +39,26 @@ fun TeamsScreen(
                         text = "Футбольные команды",
                         fontWeight = FontWeight.Bold
                     )
+                },
+                actions = {
+                    IconButton(onClick = onOpenFilters) {
+                        BadgedBox(
+                            badge = {
+                                if (showFilterBadge) {
+                                    Badge()
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = if (showFilterBadge) {
+                                    "Настройки поиска: фильтр включён"
+                                } else {
+                                    "Настройки поиска"
+                                }
+                            )
+                        }
+                    }
                 }
             )
         }
@@ -51,36 +69,13 @@ fun TeamsScreen(
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp)
         ) {
-            OutlinedTextField(
-                value = uiState.searchQuery,
-                onValueChange = onQueryChange,
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Название команды") },
-                placeholder = { Text("Например, Arsenal") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    imeAction = ImeAction.Search
-                ),
-                keyboardActions = KeyboardActions(
-                    onSearch = { onSearch() }
-                ),
-                trailingIcon = {
-                    if (uiState.searchQuery.isNotEmpty()) {
-                        TextButton(onClick = onClearSearch) {
-                            Text("Сброс")
-                        }
-                    }
-                }
-            )
-
-            Button(
-                onClick = onSearch,
-                enabled = !uiState.isLoading,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp, bottom = 12.dp)
-            ) {
-                Text("Найти")
+            if (uiState.searchQuery.isNotBlank()) {
+                Text(
+                    text = "Поиск: ${uiState.searchQuery}",
+                    modifier = Modifier.padding(vertical = 12.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
 
             when {
@@ -111,8 +106,10 @@ fun TeamsScreen(
                     ) {
                         Text(
                             text = uiState.errorMessage,
-                            color = MaterialTheme.colorScheme.error
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center
                         )
+
                         Button(onClick = onRetry) {
                             Text("Повторить")
                         }
@@ -121,7 +118,7 @@ fun TeamsScreen(
 
                 uiState.teams.isEmpty() -> {
                     Text(
-                        text = "Команды не найдены. Измените запрос.",
+                        text = "Команды не найдены. Измените настройки поиска.",
                         modifier = Modifier.padding(vertical = 24.dp)
                     )
                 }
@@ -131,7 +128,10 @@ fun TeamsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f),
-                        contentPadding = PaddingValues(bottom = 16.dp),
+                        contentPadding = PaddingValues(
+                            top = 8.dp,
+                            bottom = 16.dp
+                        ),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         items(
