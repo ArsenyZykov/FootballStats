@@ -1,6 +1,9 @@
 package com.example.footballstats.di
 
 import android.content.Context
+import androidx.lifecycle.createSavedStateHandle
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.room.Room
 import com.example.footballstats.data.local.FootballDatabase
 import com.example.footballstats.data.local.TeamFiltersDataStore
@@ -16,6 +19,12 @@ import com.example.footballstats.domain.usecase.GetTeamDetailsUseCase
 import com.example.footballstats.domain.usecase.GetTeamsUseCase
 import com.example.footballstats.domain.usecase.SetFavoriteTeamUseCase
 import com.example.footballstats.ui.common.FiltersBadgeCache
+import com.example.footballstats.ui.common.TeamSummaryCache
+import com.example.footballstats.ui.favorites.FavoritesViewModel
+import com.example.footballstats.ui.filters.TeamFiltersViewModel
+import com.example.footballstats.ui.matches.MatchesViewModel
+import com.example.footballstats.ui.teams.TeamDetailsViewModel
+import com.example.footballstats.ui.teams.TeamsViewModel
 
 object FootballDependencies {
 
@@ -98,5 +107,30 @@ object FootballDependencies {
 
     val filtersBadgeCache: FiltersBadgeCache by lazy {
         FiltersBadgeCache()
+    }
+
+    private val teamSummaryCache = TeamSummaryCache()
+
+    val viewModelFactory = viewModelFactory {
+        initializer {
+            TeamsViewModel(
+                getTeamsUseCase = getTeamsUseCase,
+                filtersRepository = teamFiltersRepository,
+                badgeCache = filtersBadgeCache,
+                summaryCache = teamSummaryCache
+            )
+        }
+        initializer { MatchesViewModel(getMatchesUseCase) }
+        initializer { FavoritesViewModel(getFavoriteTeamsUseCase, setFavoriteTeamUseCase) }
+        initializer { TeamFiltersViewModel(teamFiltersRepository, filtersBadgeCache) }
+        initializer {
+            TeamDetailsViewModel(
+                savedStateHandle = createSavedStateHandle(),
+                getTeamDetails = getTeamDetailsUseCase,
+                getFavoriteTeams = getFavoriteTeamsUseCase,
+                setFavoriteTeam = setFavoriteTeamUseCase,
+                summaryCache = teamSummaryCache
+            )
+        }
     }
 }

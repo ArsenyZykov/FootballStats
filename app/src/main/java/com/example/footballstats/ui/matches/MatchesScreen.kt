@@ -18,17 +18,30 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.footballstats.di.FootballDependencies
 import com.example.footballstats.domain.model.FootballMatch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@Composable
+fun MatchesRoute() {
+    val model: MatchesViewModel = viewModel(factory = FootballDependencies.viewModelFactory)
+    val state by model.uiState.collectAsState()
+    MatchesScreen(
+        uiState = state,
+        onYearChange = model::onYearChange,
+        onLoadMatches = model::loadMatches
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MatchesScreen() {
-    val matchesViewModel: MatchesViewModel = viewModel()
-    val uiState by matchesViewModel.uiState.collectAsState()
-
+fun MatchesScreen(
+    uiState: MatchesUiState,
+    onYearChange: (String) -> Unit,
+    onLoadMatches: () -> Unit
+) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -57,7 +70,7 @@ fun MatchesScreen() {
 
             OutlinedTextField(
                 value = uiState.yearInput,
-                onValueChange = matchesViewModel::onYearChange,
+                onValueChange = onYearChange,
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Год начала сезона") },
                 supportingText = {
@@ -69,12 +82,12 @@ fun MatchesScreen() {
                     imeAction = ImeAction.Done
                 ),
                 keyboardActions = KeyboardActions(
-                    onDone = { matchesViewModel.loadMatches() }
+                    onDone = { onLoadMatches() }
                 )
             )
 
             Button(
-                onClick = matchesViewModel::loadMatches,
+                onClick = onLoadMatches,
                 enabled = !uiState.isLoading,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -116,7 +129,7 @@ fun MatchesScreen() {
                         )
 
                         Button(
-                            onClick = matchesViewModel::loadMatches
+                            onClick = onLoadMatches
                         ) {
                             Text("Повторить")
                         }

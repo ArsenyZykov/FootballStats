@@ -2,24 +2,26 @@ package com.example.footballstats.ui.teams
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.footballstats.di.FootballDependencies
-import com.example.footballstats.domain.model.Team
 import com.example.footballstats.domain.model.TeamFilters
-import kotlinx.coroutines.CancellationException
+import com.example.footballstats.domain.repository.TeamFiltersRepository
+import com.example.footballstats.domain.usecase.GetTeamsUseCase
+import com.example.footballstats.ui.common.FiltersBadgeCache
+import com.example.footballstats.ui.common.TeamSummaryCache
+import com.example.footballstats.ui.common.launchWithErrorHandler
+import com.example.footballstats.ui.common.toUserMessage
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
-import java.io.IOException
 
-class TeamsViewModel : ViewModel() {
-
-    private val getTeamsUseCase = FootballDependencies.getTeamsUseCase
-    private val filtersRepository = FootballDependencies.teamFiltersRepository
-    private val badgeCache = FootballDependencies.filtersBadgeCache
+class TeamsViewModel(
+    private val getTeamsUseCase: GetTeamsUseCase,
+    private val filtersRepository: TeamFiltersRepository,
+    private val badgeCache: FiltersBadgeCache,
+    private val summaryCache: TeamSummaryCache
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
         TeamsUiState(isLoading = true)
@@ -46,10 +48,6 @@ class TeamsViewModel : ViewModel() {
         }
     }
 
-    fun getTeamById(id: Int): Team? {
-        return _uiState.value.teams.find { it.id == id }
-    }
-
     private fun observeFilters() {
         filtersJob?.cancel()
 
@@ -60,23 +58,8 @@ class TeamsViewModel : ViewModel() {
             )
         }
 
-        filtersJob = viewModelScope.launch {
-            try {
-                filtersRepository.filters.collect { filters ->
-                    filtersLoaded = true
-                    appliedFilters = filters
-
-                    badgeCache.update(filters)
-
-                    _uiState.update {
-                        it.copy(searchQuery = filters.name)
-                    }
-
-                    loadTeams(filters)
-                }
-            } catch (exception: CancellationException) {
-                throw exception
-            } catch (exception: Exception) {
+        filtersJob = viewModelScope.launchWithErrorHandler(
+            onError = {
                 filtersLoaded = false
                 loadingJob?.cancel()
 
@@ -86,6 +69,19 @@ class TeamsViewModel : ViewModel() {
                         errorMessage = "Не удалось прочитать настройки поиска."
                     )
                 }
+            }
+        ) {
+            filtersRepository.filters.collect { filters ->
+                filtersLoaded = true
+                appliedFilters = filters
+
+                badgeCache.update(filters)
+
+                _uiState.update {
+                    it.copy(searchQuery = filters.name)
+                }
+
+                loadTeams(filters)
             }
         }
     }
@@ -101,33 +97,9 @@ class TeamsViewModel : ViewModel() {
             )
         }
 
-        loadingJob = viewModelScope.launch {
-            try {
-                val teams = getTeamsUseCase(
-                    name = filters.name,
-                    country = filters.country,
-                    sortOrder = filters.sortOrder
-                )
-
-                ensureActive()
-
-                _uiState.update {
-                    it.copy(
-                        teams = teams,
-                        isLoading = false,
-                        errorMessage = null
-                    )
-                }
-            } catch (exception: CancellationException) {
-                throw exception
-            } catch (exception: Exception) {
-                val message = when (exception) {
-                    is IOException ->
-                        "Не удалось подключиться. Проверьте интернет и повторите."
-
-                    else ->
-                        "Не удалось загрузить команды. Попробуйте ещё раз."
-                }
+        loadingJob = viewModelScope.launchWithErrorHandler(
+            onError = { exception ->
+                val message = exception.toUserMessage("Не удалось загрузить команды. Попробуйте ещё раз.")
 
                 _uiState.update {
                     it.copy(
@@ -135,6 +107,23 @@ class TeamsViewModel : ViewModel() {
                         errorMessage = message
                     )
                 }
+            }
+        ) {
+            val teams = getTeamsUseCase(
+                name = filters.name,
+                country = filters.country,
+                sortOrder = filters.sortOrder
+            )
+
+            ensureActive()
+            summaryCache.putAll(teams)
+
+            _uiState.update {
+                it.copy(
+                    teams = teams,
+                    isLoading = false,
+                    errorMessage = null
+                )
             }
         }
     }

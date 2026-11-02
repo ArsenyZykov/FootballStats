@@ -2,20 +2,19 @@ package com.example.footballstats.ui.matches
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.footballstats.di.FootballDependencies
-import kotlinx.coroutines.CancellationException
+import com.example.footballstats.domain.usecase.GetMatchesUseCase
+import com.example.footballstats.ui.common.launchWithErrorHandler
+import com.example.footballstats.ui.common.toUserMessage
+import java.util.Calendar
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
-import java.io.IOException
-import java.util.Calendar
 
-class MatchesViewModel : ViewModel() {
-
-    private val getMatchesUseCase = FootballDependencies.getMatchesUseCase
+class MatchesViewModel(
+    private val getMatchesUseCase: GetMatchesUseCase
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MatchesUiState())
     val uiState = _uiState.asStateFlow()
@@ -61,33 +60,9 @@ class MatchesViewModel : ViewModel() {
             )
         }
 
-        loadingJob = viewModelScope.launch {
-            try {
-                val matches = getMatchesUseCase(
-                    leagueId = 41,
-                    year = year,
-                    limit = 20
-                )
-
-                ensureActive()
-
-                _uiState.update {
-                    it.copy(
-                        matches = matches,
-                        isLoading = false,
-                        errorMessage = null
-                    )
-                }
-            } catch (exception: CancellationException) {
-                throw exception
-            } catch (exception: Exception) {
-                val message = when (exception) {
-                    is IOException ->
-                        "Не удалось подключиться. Проверьте интернет и повторите."
-
-                    else ->
-                        "Не удалось загрузить матчи. Попробуйте ещё раз."
-                }
+        loadingJob = viewModelScope.launchWithErrorHandler(
+            onError = { exception ->
+                val message = exception.toUserMessage("Не удалось загрузить матчи. Попробуйте ещё раз.")
 
                 _uiState.update {
                     it.copy(
@@ -95,6 +70,22 @@ class MatchesViewModel : ViewModel() {
                         errorMessage = message
                     )
                 }
+            }
+        ) {
+            val matches = getMatchesUseCase(
+                leagueId = 41,
+                year = year,
+                limit = 20
+            )
+
+            ensureActive()
+
+            _uiState.update {
+                it.copy(
+                    matches = matches,
+                    isLoading = false,
+                    errorMessage = null
+                )
             }
         }
     }

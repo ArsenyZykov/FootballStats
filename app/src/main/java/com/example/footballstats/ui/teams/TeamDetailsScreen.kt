@@ -20,34 +20,59 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.constraintlayout.compose.ConstraintLayout
 import androidx.constraintlayout.compose.Dimension
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.footballstats.di.FootballDependencies
 import com.example.footballstats.domain.model.Team
-import com.example.footballstats.domain.repository.TeamDetailsIssue
-import java.text.NumberFormat
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+
+@Composable
+fun TeamDetailsRoute(onBackClick: () -> Unit) {
+    val model: TeamDetailsViewModel = viewModel(factory = FootballDependencies.viewModelFactory)
+    val state by model.uiState.collectAsState()
+    val context = LocalContext.current
+    TeamDetailsScreen(
+        uiState = state,
+        onToggleFavorite = model::toggleFavorite,
+        onRefresh = model::refresh,
+        onBackClick = onBackClick,
+        onShare = { text ->
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, text)
+            }
+            context.startActivity(Intent.createChooser(intent, "Поделиться командой"))
+        }
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TeamDetailsScreen(
-    team: Team,
-    isFavorite: Boolean,
-    canChangeFavorite: Boolean,
-    favoriteError: String?,
+    uiState: TeamDetailsUiState,
     onToggleFavorite: () -> Unit,
-    onBackClick: () -> Unit
+    onRefresh: () -> Unit,
+    onBackClick: () -> Unit,
+    onShare: (String) -> Unit
 ) {
-    val context = LocalContext.current
-    val detailsViewModel: TeamDetailsViewModel = viewModel()
-    val uiState by detailsViewModel.uiState.collectAsState()
-
-    val result = uiState.result
-    val details = result?.details
-
+    val content = uiState.content
+    if (content == null) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            if (uiState.isLoading) CircularProgressIndicator()
+            uiState.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            uiState.favoriteError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            if (!uiState.isLoading) Button(onClick = onRefresh) { Text("Повторить") }
+            TextButton(onClick = onBackClick) { Text("Назад") }
+        }
+        return
+    }
+    val team = content.team
     var showAllPlayers by rememberSaveable(team.id) {
         mutableStateOf(false)
     }
@@ -71,7 +96,7 @@ fun TeamDetailsScreen(
                 },
                 actions = {
                     IconButton(
-                        onClick = detailsViewModel::refresh,
+                        onClick = onRefresh,
                         enabled = !uiState.isLoading &&
                                 !uiState.isRefreshing
                     ) {
@@ -82,44 +107,7 @@ fun TeamDetailsScreen(
                     }
 
                     IconButton(
-                        onClick = {
-                            val shareText = buildString {
-                                appendLine(details?.name ?: team.name)
-                                appendLine(
-                                    "Страна: ${details?.country ?: team.country}"
-                                )
-
-                                details?.code?.let {
-                                    appendLine("Код: $it")
-                                }
-
-                                details?.foundedYear?.let {
-                                    appendLine("Год основания: $it")
-                                }
-
-                                details?.stadiumName?.let {
-                                    appendLine("Стадион: $it")
-                                }
-
-                                details?.stadiumCity?.let {
-                                    appendLine("Город: $it")
-                                }
-
-                                appendLine("Источник: SStats.net")
-                            }.trim()
-
-                            val intent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, shareText)
-                            }
-
-                            context.startActivity(
-                                Intent.createChooser(
-                                    intent,
-                                    "Поделиться командой"
-                                )
-                            )
-                        }
+                        onClick = { onShare(content.shareText) }
                     ) {
                         Icon(
                             imageVector = Icons.Default.Share,
@@ -137,7 +125,7 @@ fun TeamDetailsScreen(
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
-            val (logo, name, country, content) = createRefs()
+            val (logo, name, country, detailsContent) = createRefs()
 
             Surface(
                 modifier = Modifier
@@ -159,7 +147,7 @@ fun TeamDetailsScreen(
             }
 
             Text(
-                text = details?.name ?: team.name,
+                text = team.name,
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
@@ -172,7 +160,7 @@ fun TeamDetailsScreen(
             )
 
             Text(
-                text = details?.country ?: team.country,
+                text = team.country,
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
                 textAlign = TextAlign.Center,
@@ -185,7 +173,7 @@ fun TeamDetailsScreen(
             )
 
             Column(
-                modifier = Modifier.constrainAs(content) {
+                modifier = Modifier.constrainAs(detailsContent) {
                     top.linkTo(country.bottom, margin = 20.dp)
                     start.linkTo(parent.start)
                     end.linkTo(parent.end)
@@ -196,11 +184,11 @@ fun TeamDetailsScreen(
             ) {
                 FilledTonalButton(
                     onClick = onToggleFavorite,
-                    enabled = canChangeFavorite,
+                    enabled = uiState.canChangeFavorite,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(
-                        imageVector = if (isFavorite) {
+                        imageVector = if (uiState.isFavorite) {
                             Icons.Default.Star
                         } else {
                             Icons.Default.StarBorder
@@ -211,7 +199,7 @@ fun TeamDetailsScreen(
                     Spacer(Modifier.width(8.dp))
 
                     Text(
-                        text = if (isFavorite) {
+                        text = if (uiState.isFavorite) {
                             "Убрать из избранного"
                         } else {
                             "В избранное"
@@ -219,7 +207,7 @@ fun TeamDetailsScreen(
                     )
                 }
 
-                favoriteError?.let {
+                uiState.favoriteError?.let {
                     Text(
                         text = it,
                         color = MaterialTheme.colorScheme.error
@@ -255,7 +243,7 @@ fun TeamDetailsScreen(
                     )
 
                     OutlinedButton(
-                        onClick = detailsViewModel::refresh,
+                        onClick = onRefresh,
                         enabled = !uiState.isLoading &&
                                 !uiState.isRefreshing
                     ) {
@@ -263,140 +251,29 @@ fun TeamDetailsScreen(
                     }
                 }
 
-                if (details != null && result != null) {
-                    val notice = when (result.issue) {
-                        TeamDetailsIssue.REFRESH_FAILED ->
-                            "Не удалось обновить данные. " +
-                                    "Показана сохранённая копия."
-
-                        TeamDetailsIssue.CACHE_WRITE_FAILED ->
-                            "Данные загружены, но не удалось сохранить " +
-                                    "их для просмотра без интернета."
-
-                        null -> null
+                content.notice?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                content.sections.forEach { section ->
+                    DetailsSection(section.title) {
+                        section.fields.forEach { field -> DetailsField(field.label, field.value) }
                     }
-
-                    notice?.let {
-                        Text(
-                            text = it,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-
-                    DetailsSection(title = "О команде") {
-                        DetailsField(
-                            label = "Код команды",
-                            value = details.code
-                        )
-
-                        DetailsField(
-                            label = "Год основания",
-                            value = details.foundedYear?.toString()
-                        )
-                    }
-
-                    DetailsSection(title = "Стадион") {
-                        DetailsField(
-                            label = "Название",
-                            value = details.stadiumName
-                        )
-
-                        DetailsField(
-                            label = "Город",
-                            value = details.stadiumCity
-                        )
-
-                        DetailsField(
-                            label = "Адрес",
-                            value = details.stadiumAddress
-                        )
-
-                        DetailsField(
-                            label = "Вместимость",
-                            value = details.stadiumCapacity?.let {
-                                NumberFormat.getIntegerInstance(
-                                    Locale.getDefault()
-                                ).format(it)
-                            }
-                        )
-                    }
-
-                    DetailsSection(title = "Тренер по данным API") {
-                        Text(
-                            text = details.coachName ?: "Нет данных"
-                        )
-                    }
-
-                    DetailsSection(title = "Игроки по данным API") {
-                        if (details.players.isEmpty()) {
-                            Text("Нет данных")
-                        } else {
-                            val visiblePlayers = if (showAllPlayers) {
-                                details.players
-                            } else {
-                                details.players.take(6)
-                            }
-
-                            visiblePlayers.forEach { player ->
-                                Text(text = "• ${player.name}")
-                            }
-
-                            if (details.players.size > 6) {
-                                TextButton(
-                                    onClick = {
-                                        showAllPlayers = !showAllPlayers
-                                    }
-                                ) {
-                                    Text(
-                                        text = if (showAllPlayers) {
-                                            "Свернуть"
-                                        } else {
-                                            "Показать всех (${details.players.size})"
-                                        }
-                                    )
-                                }
+                }
+                if (content.sourceLabel != null) {
+                    DetailsSection("Игроки по данным API") {
+                        if (content.players.isEmpty()) Text("Нет данных")
+                        val visiblePlayers = if (showAllPlayers) content.players else content.players.take(6)
+                        visiblePlayers.forEach { Text(it) }
+                        if (content.players.size > 6) {
+                            TextButton(onClick = { showAllPlayers = !showAllPlayers }) {
+                                Text(if (showAllPlayers) "Свернуть" else content.showAllPlayersLabel)
                             }
                         }
                     }
-
-                    DetailsSection(title = "Турниры и сезоны в базе") {
-                        if (details.seasons.isEmpty()) {
-                            Text("Нет данных")
-                        } else {
-                            val tournaments = details.seasons
-                                .groupBy { it.leagueId }
-                                .values
-                                .sortedBy { it.first().leagueName }
-
-                            tournaments.forEach { seasons ->
-                                Text(
-                                    text = seasons.first().leagueName,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-
-                                Text(
-                                    text = "Годы сезонов: " +
-                                            seasons
-                                                .map { it.year }
-                                                .distinct()
-                                                .sortedDescending()
-                                                .joinToString(),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
+                    DetailsSection("Турниры и сезоны в базе") {
+                        if (content.tournaments.isEmpty()) Text("Нет данных")
+                        content.tournaments.forEach { DetailsField(it.label, it.value) }
                     }
-
                     Text(
-                        text = (
-                                if (result.isFromCache) {
-                                    "Сохранённая копия"
-                                } else {
-                                    "Загружено из SStats.net"
-                                }
-                                ) + " · " + formatDetailsDate(result.updatedAt),
+                        text = content.sourceLabel,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -460,9 +337,20 @@ private fun DetailsField(
     }
 }
 
-private fun formatDetailsDate(timestamp: Long): String {
-    return SimpleDateFormat(
-        "dd.MM.yyyy HH:mm",
-        Locale.getDefault()
-    ).format(Date(timestamp))
+@Preview(showBackground = true)
+@Composable
+private fun TeamDetailsPreview() {
+    MaterialTheme {
+        TeamDetailsScreen(
+            uiState = TeamDetailsUiState(
+                content = TeamDetailsUiModel(
+                    team = Team(1, "Arsenal", "England", null),
+                    shareText = "Arsenal\nСтрана: England"
+                ),
+                isLoading = false,
+                favoritesLoaded = true
+            ),
+            onToggleFavorite = {}, onRefresh = {}, onBackClick = {}, onShare = {}
+        )
+    }
 }
