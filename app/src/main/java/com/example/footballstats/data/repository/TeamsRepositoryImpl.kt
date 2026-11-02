@@ -13,20 +13,23 @@ class TeamsRepositoryImpl(
     override suspend fun getTeams(
         name: String?,
         offset: Int,
-        limit: Int
+        limit: Int,
+        country: String?
     ): List<Team> = withContext(Dispatchers.IO) {
         val response = api.getTeams(
             name = name?.trim()?.takeIf { it.isNotEmpty() },
             offset = offset,
-            limit = limit
+            limit = limit,
+            country = country?.trim()?.takeIf { it.isNotEmpty() }
         )
 
-        if (!response.status.equals("OK", ignoreCase = true)) {
-            throw IllegalStateException("API не смог загрузить команды")
+        check(response.status.equals("OK", ignoreCase = true)) {
+            "API не смог загрузить команды"
         }
 
-        val teams = response.data
-            ?: throw IllegalStateException("API вернул некорректный ответ")
+        val teams = checkNotNull(response.data) {
+            "API вернул некорректный ответ"
+        }
 
         teams.map { dto ->
             Team(

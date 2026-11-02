@@ -4,11 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.footballstats.di.FootballDependencies
 import com.example.footballstats.domain.model.Team
+import com.example.footballstats.domain.model.TeamFilters
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.IOException
@@ -16,45 +18,80 @@ import java.io.IOException
 class TeamsViewModel : ViewModel() {
 
     private val getTeamsUseCase = FootballDependencies.getTeamsUseCase
+    private val filtersRepository = FootballDependencies.teamFiltersRepository
+    private val badgeCache = FootballDependencies.filtersBadgeCache
 
-    private val _uiState = MutableStateFlow(TeamsUiState())
+    private val _uiState = MutableStateFlow(
+        TeamsUiState(isLoading = true)
+    )
     val uiState = _uiState.asStateFlow()
 
+    val showFilterBadge = badgeCache.showBadge
+
+    private var appliedFilters = TeamFilters()
+
     private var loadingJob: Job? = null
+    private var filtersJob: Job? = null
+    private var filtersLoaded = false
 
     init {
-        loadTeams()
-    }
-
-    fun onSearchQueryChange(query: String) {
-        _uiState.update {
-            it.copy(searchQuery = query)
-        }
-    }
-
-    fun searchTeams() {
-        loadTeams()
-    }
-
-    fun clearSearch() {
-        _uiState.update {
-            it.copy(searchQuery = "")
-        }
-        loadTeams()
+        observeFilters()
     }
 
     fun retry() {
-        loadTeams()
+        if (filtersLoaded) {
+            loadTeams(appliedFilters)
+        } else {
+            observeFilters()
+        }
     }
 
     fun getTeamById(id: Int): Team? {
         return _uiState.value.teams.find { it.id == id }
     }
 
-    private fun loadTeams() {
-        loadingJob?.cancel()
+    private fun observeFilters() {
+        filtersJob?.cancel()
 
-        val query = _uiState.value.searchQuery.trim()
+        _uiState.update {
+            it.copy(
+                isLoading = true,
+                errorMessage = null
+            )
+        }
+
+        filtersJob = viewModelScope.launch {
+            try {
+                filtersRepository.filters.collect { filters ->
+                    filtersLoaded = true
+                    appliedFilters = filters
+
+                    badgeCache.update(filters)
+
+                    _uiState.update {
+                        it.copy(searchQuery = filters.name)
+                    }
+
+                    loadTeams(filters)
+                }
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                filtersLoaded = false
+                loadingJob?.cancel()
+
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = "Не удалось прочитать настройки поиска."
+                    )
+                }
+            }
+        }
+    }
+
+    private fun loadTeams(filters: TeamFilters) {
+        loadingJob?.cancel()
 
         _uiState.update {
             it.copy(
@@ -66,7 +103,11 @@ class TeamsViewModel : ViewModel() {
 
         loadingJob = viewModelScope.launch {
             try {
-                val teams = getTeamsUseCase(name = query)
+                val teams = getTeamsUseCase(
+                    name = filters.name,
+                    country = filters.country,
+                    sortOrder = filters.sortOrder
+                )
 
                 ensureActive()
 

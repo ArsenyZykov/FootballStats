@@ -7,6 +7,7 @@ interface TeamsRepository {
     suspend fun getTeams(
         name: String? = null,
         offset: Int = 0,
-        limit: Int = 20
+        limit: Int = 20,
+        country: String? = null
     ): List<Team>
 }
