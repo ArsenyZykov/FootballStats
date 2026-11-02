@@ -9,12 +9,28 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.footballstats.di.FootballDependencies
 import com.example.footballstats.domain.model.Team
 import com.example.footballstats.ui.teams.TeamLogo
+
+@Composable
+fun FavoritesRoute(onTeamClick: (Int) -> Unit) {
+    val model: FavoritesViewModel = viewModel(factory = FootballDependencies.viewModelFactory)
+    val state by model.uiState.collectAsState()
+    FavoritesScreen(
+        uiState = state,
+        onRetry = model::retry,
+        onRemoveFavorite = { model.setFavorite(it, false) },
+        onTeamClick = onTeamClick
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

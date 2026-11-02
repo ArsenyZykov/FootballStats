@@ -2,15 +2,15 @@ package com.example.footballstats.ui.filters
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.footballstats.di.FootballDependencies
 import com.example.footballstats.domain.model.TeamFilters
 import com.example.footballstats.domain.model.TeamSortOrder
-import kotlinx.coroutines.CancellationException
+import com.example.footballstats.domain.repository.TeamFiltersRepository
+import com.example.footballstats.ui.common.FiltersBadgeCache
+import com.example.footballstats.ui.common.launchWithErrorHandler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 
 data class TeamFiltersUiState(
     val name: String = "",
@@ -23,10 +23,10 @@ data class TeamFiltersUiState(
     val errorMessage: String? = null
 )
 
-class TeamFiltersViewModel : ViewModel() {
-
-    private val repository = FootballDependencies.teamFiltersRepository
-    private val badgeCache = FootballDependencies.filtersBadgeCache
+class TeamFiltersViewModel(
+    private val repository: TeamFiltersRepository,
+    private val badgeCache: FiltersBadgeCache
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TeamFiltersUiState())
     val uiState = _uiState.asStateFlow()
@@ -38,27 +38,25 @@ class TeamFiltersViewModel : ViewModel() {
     fun loadFilters() {
         _uiState.value = TeamFiltersUiState()
 
-        viewModelScope.launch {
-            try {
-                val filters = repository.filters.first()
-
-                badgeCache.update(filters)
-
-                _uiState.value = TeamFiltersUiState(
-                    name = filters.name,
-                    country = filters.country,
-                    sortOrder = filters.sortOrder,
-                    isLoading = false,
-                    isReady = true
-                )
-            } catch (exception: CancellationException) {
-                throw exception
-            } catch (exception: Exception) {
+        viewModelScope.launchWithErrorHandler(
+            onError = {
                 _uiState.value = TeamFiltersUiState(
                     isLoading = false,
                     errorMessage = "Не удалось прочитать настройки."
                 )
             }
+        ) {
+            val filters = repository.filters.first()
+
+            badgeCache.update(filters)
+
+            _uiState.value = TeamFiltersUiState(
+                name = filters.name,
+                country = filters.country,
+                sortOrder = filters.sortOrder,
+                isLoading = false,
+                isReady = true
+            )
         }
     }
 
@@ -114,27 +112,25 @@ class TeamFiltersViewModel : ViewModel() {
             it.copy(isSaving = true, errorMessage = null)
         }
 
-        viewModelScope.launch {
-            try {
-                repository.saveFilters(filters)
-                badgeCache.update(filters)
-
-                _uiState.update {
-                    it.copy(
-                        name = filters.name,
-                        isSaving = false,
-                        isSaved = true
-                    )
-                }
-            } catch (exception: CancellationException) {
-                throw exception
-            } catch (exception: Exception) {
+        viewModelScope.launchWithErrorHandler(
+            onError = {
                 _uiState.update {
                     it.copy(
                         isSaving = false,
                         errorMessage = "Не удалось сохранить настройки."
                     )
                 }
+            }
+        ) {
+            repository.saveFilters(filters)
+            badgeCache.update(filters)
+
+            _uiState.update {
+                it.copy(
+                    name = filters.name,
+                    isSaving = false,
+                    isSaved = true
+                )
             }
         }
     }

@@ -11,6 +11,8 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -18,9 +20,25 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.footballstats.R
+import com.example.footballstats.di.FootballDependencies
 import com.example.footballstats.domain.model.Team
 import java.util.Locale
+
+@Composable
+fun TeamsRoute(onOpenFilters: () -> Unit, onTeamClick: (Int) -> Unit) {
+    val model: TeamsViewModel = viewModel(factory = FootballDependencies.viewModelFactory)
+    val state by model.uiState.collectAsState()
+    val badge by model.showFilterBadge.collectAsState()
+    TeamsScreen(
+        uiState = state,
+        showFilterBadge = badge,
+        onOpenFilters = onOpenFilters,
+        onRetry = model::retry,
+        onTeamClick = onTeamClick
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -229,6 +247,16 @@ internal fun TeamLogo(
             contentDescription = "Футбольная команда",
             modifier = modifier,
             tint = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true)
+@Composable
+private fun TeamsPreview() {
+    MaterialTheme {
+        TeamsScreen(
+            uiState = TeamsUiState(teams = listOf(Team(1, "Arsenal", "England", null))),
+            showFilterBadge = false, onOpenFilters = {}, onRetry = {}, onTeamClick = {}
         )
     }
 }

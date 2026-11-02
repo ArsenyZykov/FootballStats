@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.footballstats.di.FootballDependencies
 import com.example.footballstats.domain.model.TeamSortOrder
 
 private val countryOptions = listOf(
@@ -36,21 +37,37 @@ private val sortOptions = listOf(
     TeamSortOrder.NAME_DESC to "Название: Я–А"
 )
 
+@Composable
+fun TeamFiltersRoute(onBackClick: () -> Unit, onFiltersSaved: () -> Unit) {
+    val model: TeamFiltersViewModel = viewModel(factory = FootballDependencies.viewModelFactory)
+    val state by model.uiState.collectAsState()
+    LaunchedEffect(state.isSaved) {
+        if (state.isSaved) onFiltersSaved()
+    }
+    TeamFiltersScreen(
+        uiState = state,
+        onBackClick = onBackClick,
+        onNameChange = model::onNameChange,
+        onCountryChange = model::onCountryChange,
+        onSortOrderChange = model::onSortOrderChange,
+        onReset = model::resetDraft,
+        onSave = model::saveFilters,
+        onRetry = model::loadFilters
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TeamFiltersScreen(
+    uiState: TeamFiltersUiState,
     onBackClick: () -> Unit,
-    onFiltersSaved: () -> Unit
+    onNameChange: (String) -> Unit,
+    onCountryChange: (String) -> Unit,
+    onSortOrderChange: (TeamSortOrder) -> Unit,
+    onReset: () -> Unit,
+    onSave: () -> Unit,
+    onRetry: () -> Unit
 ) {
-    val filtersViewModel: TeamFiltersViewModel = viewModel()
-    val uiState by filtersViewModel.uiState.collectAsState()
-
-    LaunchedEffect(uiState.isSaved) {
-        if (uiState.isSaved) {
-            onFiltersSaved()
-        }
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -97,7 +114,7 @@ fun TeamFiltersScreen(
 
                     OutlinedTextField(
                         value = uiState.name,
-                        onValueChange = filtersViewModel::onNameChange,
+                        onValueChange = onNameChange,
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("Название команды") },
                         placeholder = { Text("Например, Arsenal") },
@@ -112,7 +129,7 @@ fun TeamFiltersScreen(
                             ?.second ?: uiState.country,
                         options = countryOptions,
                         enabled = canEdit,
-                        onSelect = filtersViewModel::onCountryChange
+                        onSelect = onCountryChange
                     )
 
                     FilterDropdown(
@@ -122,7 +139,7 @@ fun TeamFiltersScreen(
                             .second,
                         options = sortOptions,
                         enabled = canEdit,
-                        onSelect = filtersViewModel::onSortOrderChange
+                        onSelect = onSortOrderChange
                     )
 
                     Text(
@@ -134,7 +151,7 @@ fun TeamFiltersScreen(
                     )
 
                     OutlinedButton(
-                        onClick = filtersViewModel::resetDraft,
+                        onClick = onReset,
                         enabled = canEdit,
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -142,7 +159,7 @@ fun TeamFiltersScreen(
                     }
 
                     Button(
-                        onClick = filtersViewModel::saveFilters,
+                        onClick = onSave,
                         enabled = canEdit,
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -175,7 +192,7 @@ fun TeamFiltersScreen(
 
                 if (!uiState.isReady) {
                     Button(
-                        onClick = filtersViewModel::loadFilters,
+                        onClick = onRetry,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Повторить чтение настроек")

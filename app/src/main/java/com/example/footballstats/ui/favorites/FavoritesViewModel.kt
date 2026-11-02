@@ -2,15 +2,15 @@ package com.example.footballstats.ui.favorites
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.footballstats.di.FootballDependencies
 import com.example.footballstats.domain.model.Team
-import kotlinx.coroutines.CancellationException
+import com.example.footballstats.domain.usecase.GetFavoriteTeamsUseCase
+import com.example.footballstats.domain.usecase.SetFavoriteTeamUseCase
+import com.example.footballstats.ui.common.launchWithErrorHandler
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 
 data class FavoritesUiState(
     val teams: List<Team> = emptyList(),
@@ -20,13 +20,10 @@ data class FavoritesUiState(
     val errorMessage: String? = null
 )
 
-class FavoritesViewModel : ViewModel() {
-
-    private val getFavoriteTeams =
-        FootballDependencies.getFavoriteTeamsUseCase
-
-    private val setFavoriteTeam =
-        FootballDependencies.setFavoriteTeamUseCase
+class FavoritesViewModel(
+    private val getFavoriteTeams: GetFavoriteTeamsUseCase,
+    private val setFavoriteTeam: SetFavoriteTeamUseCase
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(FavoritesUiState())
     val uiState = _uiState.asStateFlow()
@@ -55,20 +52,20 @@ class FavoritesViewModel : ViewModel() {
             )
         }
 
-        viewModelScope.launch {
-            try {
-                setFavoriteTeam(
-                    team = team,
-                    isFavorite = isFavorite
-                )
-            } catch (exception: CancellationException) {
-                throw exception
-            } catch (exception: Exception) {
+        viewModelScope.launchWithErrorHandler(
+            onError = {
                 _uiState.update {
                     it.copy(
                         errorMessage = "Не удалось изменить избранное. Повторите."
                     )
                 }
+            }
+        ) {
+            try {
+                setFavoriteTeam(
+                    team = team,
+                    isFavorite = isFavorite
+                )
             } finally {
                 _uiState.update {
                     it.copy(
@@ -90,25 +87,23 @@ class FavoritesViewModel : ViewModel() {
             )
         }
 
-        observingJob = viewModelScope.launch {
-            try {
-                getFavoriteTeams().collect { teams ->
-                    _uiState.update {
-                        it.copy(
-                            teams = teams,
-                            isLoading = false,
-                            hasLoaded = true
-                        )
-                    }
-                }
-            } catch (exception: CancellationException) {
-                throw exception
-            } catch (exception: Exception) {
+        observingJob = viewModelScope.launchWithErrorHandler(
+            onError = {
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         hasLoaded = false,
                         errorMessage = "Не удалось прочитать избранное."
+                    )
+                }
+            }
+        ) {
+            getFavoriteTeams().collect { teams ->
+                _uiState.update {
+                    it.copy(
+                        teams = teams,
+                        isLoading = false,
+                        hasLoaded = true
                     )
                 }
             }
