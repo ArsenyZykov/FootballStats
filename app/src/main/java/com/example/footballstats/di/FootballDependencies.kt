@@ -7,12 +7,14 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.room.Room
 import com.example.footballstats.data.local.FootballDatabase
 import com.example.footballstats.data.local.TeamFiltersDataStore
+import com.example.footballstats.data.reminder.AndroidLessonReminderScheduler
 import com.example.footballstats.data.remote.FootballApiClient
 import com.example.footballstats.data.repository.FavoritesRepositoryImpl
 import com.example.footballstats.data.repository.MatchesRepositoryImpl
 import com.example.footballstats.data.repository.ProfileRepositoryImpl
 import com.example.footballstats.data.repository.TeamDetailsRepositoryImpl
 import com.example.footballstats.data.repository.TeamsRepositoryImpl
+import com.example.footballstats.domain.reminder.LessonReminderScheduler
 import com.example.footballstats.domain.repository.TeamFiltersRepository
 import com.example.footballstats.domain.usecase.GetFavoriteTeamsUseCase
 import com.example.footballstats.domain.usecase.GetMatchesUseCase
@@ -114,11 +116,27 @@ object FootballDependencies {
 
     private val teamSummaryCache = TeamSummaryCache()
 
-    private val profileRepository by lazy { ProfileRepositoryImpl(requireAppContext()) }
+    private val profileRepository by lazy {
+        ProfileRepositoryImpl(requireAppContext())
+    }
+
+    val lessonReminderScheduler: LessonReminderScheduler by lazy {
+        AndroidLessonReminderScheduler(requireAppContext())
+    }
 
     val viewModelFactory = viewModelFactory {
-        initializer { ProfileViewModel(profileRepository) }
-        initializer { EditProfileViewModel(profileRepository, createSavedStateHandle()) }
+        initializer {
+            ProfileViewModel(profileRepository)
+        }
+
+        initializer {
+            EditProfileViewModel(
+                repository = profileRepository,
+                savedState = createSavedStateHandle(),
+                reminderScheduler = lessonReminderScheduler
+            )
+        }
+
         initializer {
             TeamsViewModel(
                 getTeamsUseCase = getTeamsUseCase,
@@ -127,9 +145,25 @@ object FootballDependencies {
                 summaryCache = teamSummaryCache
             )
         }
-        initializer { MatchesViewModel(getMatchesUseCase) }
-        initializer { FavoritesViewModel(getFavoriteTeamsUseCase, setFavoriteTeamUseCase) }
-        initializer { TeamFiltersViewModel(teamFiltersRepository, filtersBadgeCache) }
+
+        initializer {
+            MatchesViewModel(getMatchesUseCase)
+        }
+
+        initializer {
+            FavoritesViewModel(
+                getFavoriteTeamsUseCase,
+                setFavoriteTeamUseCase
+            )
+        }
+
+        initializer {
+            TeamFiltersViewModel(
+                teamFiltersRepository,
+                filtersBadgeCache
+            )
+        }
+
         initializer {
             TeamDetailsViewModel(
                 savedStateHandle = createSavedStateHandle(),
