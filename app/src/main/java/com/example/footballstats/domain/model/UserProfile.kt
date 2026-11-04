@@ -4,7 +4,11 @@ data class UserProfile(
     val fullName: String = "",
     val position: String = "",
     val avatarUri: String = "",
-    val resumeUrl: String = ""
+    val resumeUrl: String = "",
+    val lessonTime: String = ""
 )
 
-data class ProfileDocument(val uri: String, val mimeType: String)
+data class ProfileDocument(
+    val uri: String,
+    val mimeType: String
+)
