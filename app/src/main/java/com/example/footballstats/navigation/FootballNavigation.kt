@@ -14,10 +14,13 @@ import com.example.footballstats.ui.competitions.CompetitionsScreen
 import com.example.footballstats.ui.favorites.FavoritesRoute
 import com.example.footballstats.ui.filters.TeamFiltersRoute
 import com.example.footballstats.ui.matches.MatchesRoute
+import com.example.footballstats.ui.profile.EditProfileRoute
+import com.example.footballstats.ui.profile.ProfileRoute
 import com.example.footballstats.ui.teams.TeamDetailsRoute
 import com.example.footballstats.ui.teams.TeamsRoute
 
 private const val TEAM_FILTERS_ROUTE = "team_filters"
+private const val EDIT_PROFILE_ROUTE = "edit_profile"
 
 @Composable
 fun FootballNavigation() {
@@ -25,7 +28,7 @@ fun FootballNavigation() {
     val entry by navController.currentBackStackEntryAsState()
     val currentRoute = entry?.destination?.route
     val showBottomBar = currentRoute != AppDestination.TeamDetails.route &&
-        currentRoute != TEAM_FILTERS_ROUTE
+        currentRoute != TEAM_FILTERS_ROUTE && currentRoute != EDIT_PROFILE_ROUTE
 
     Scaffold(bottomBar = {
         if (showBottomBar) FootballBottomBar(navController)
@@ -49,6 +52,12 @@ fun FootballNavigation() {
             }
             composable(AppDestination.Matches.route) { MatchesRoute() }
             composable(AppDestination.Competitions.route) { CompetitionsScreen() }
+            composable(AppDestination.Profile.route) {
+                ProfileRoute(onEdit = { navController.navigate(EDIT_PROFILE_ROUTE) { launchSingleTop = true } })
+            }
+            composable(EDIT_PROFILE_ROUTE) {
+                EditProfileRoute(onClose = { navController.popBackStack() })
+            }
             composable(AppDestination.Favorites.route) {
                 FavoritesRoute(onTeamClick = {
                     navController.navigate(AppDestination.TeamDetails.createRoute(it))

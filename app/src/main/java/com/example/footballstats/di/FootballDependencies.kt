@@ -10,6 +10,7 @@ import com.example.footballstats.data.local.TeamFiltersDataStore
 import com.example.footballstats.data.remote.FootballApiClient
 import com.example.footballstats.data.repository.FavoritesRepositoryImpl
 import com.example.footballstats.data.repository.MatchesRepositoryImpl
+import com.example.footballstats.data.repository.ProfileRepositoryImpl
 import com.example.footballstats.data.repository.TeamDetailsRepositoryImpl
 import com.example.footballstats.data.repository.TeamsRepositoryImpl
 import com.example.footballstats.domain.repository.TeamFiltersRepository
@@ -23,6 +24,8 @@ import com.example.footballstats.ui.common.TeamSummaryCache
 import com.example.footballstats.ui.favorites.FavoritesViewModel
 import com.example.footballstats.ui.filters.TeamFiltersViewModel
 import com.example.footballstats.ui.matches.MatchesViewModel
+import com.example.footballstats.ui.profile.EditProfileViewModel
+import com.example.footballstats.ui.profile.ProfileViewModel
 import com.example.footballstats.ui.teams.TeamDetailsViewModel
 import com.example.footballstats.ui.teams.TeamsViewModel
 
@@ -111,7 +114,11 @@ object FootballDependencies {
 
     private val teamSummaryCache = TeamSummaryCache()
 
+    private val profileRepository by lazy { ProfileRepositoryImpl(requireAppContext()) }
+
     val viewModelFactory = viewModelFactory {
+        initializer { ProfileViewModel(profileRepository) }
+        initializer { EditProfileViewModel(profileRepository, createSavedStateHandle()) }
         initializer {
             TeamsViewModel(
                 getTeamsUseCase = getTeamsUseCase,

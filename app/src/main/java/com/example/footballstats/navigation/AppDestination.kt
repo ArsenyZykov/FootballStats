@@ -3,6 +3,7 @@ package com.example.footballstats.navigation
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.material.icons.filled.Stadium
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -37,6 +38,12 @@ sealed class AppDestination(
         icon = Icons.Default.Favorite
     )
 
+    data object Profile : AppDestination(
+        route = "profile",
+        title = "Профиль",
+        icon = Icons.Default.Person
+    )
+
     data object TeamDetails {
         const val route = "team_details/{teamId}"
 
@@ -50,5 +57,6 @@ val bottomNavigationItems = listOf(
     AppDestination.Teams,
     AppDestination.Matches,
     AppDestination.Competitions,
-    AppDestination.Favorites
+    AppDestination.Favorites,
+    AppDestination.Profile
 )
